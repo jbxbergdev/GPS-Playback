@@ -1,2 +1,2 @@
 # GPS-Playback
-A fake GPS provider app that doesn't suck
+An app that allows playback of pre-recorded, realistic GPS tracks.
