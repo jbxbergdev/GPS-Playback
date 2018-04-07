@@ -2,6 +2,7 @@ package de.bolz.gpsplayback.playback;
 
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Build;
 
 import java.io.IOException;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -75,7 +76,10 @@ public class PlaybackEngine {
         appExecutors.schedule(() -> {
             try {
                 Location locationFromQueue = locationQueue.take();
-                locationFromQueue.setTime(System.currentTimeMillis());
+                locationFromQueue.setTime(timeProvider.currentTimeMillis());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                    locationFromQueue.setElapsedRealtimeNanos(timeProvider.elapsedRealtimeNanos());
+                }
                 System.out.println("##### posting " + locationFromQueue);
                 locationManager.setTestProviderLocation(LocationManager.GPS_PROVIDER, locationFromQueue);
             } catch (InterruptedException e) {
