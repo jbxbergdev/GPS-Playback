@@ -1,4 +1,4 @@
-package de.bolz.gpsplayback;
+package de.bolz.gpsplayback.playback;
 
 import android.location.Location;
 

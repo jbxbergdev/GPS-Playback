@@ -4,6 +4,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.Button;
 
+import de.bolz.gpsplayback.playback.PlaybackService;
+
 public class MainActivity extends AppCompatActivity {
 
     @Override
