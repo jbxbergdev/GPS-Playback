@@ -1,5 +1,7 @@
 package de.bolz.gpsplayback.playback;
 
+import android.arch.lifecycle.LiveData;
+import android.arch.lifecycle.MutableLiveData;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
@@ -12,6 +14,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import de.bolz.gpsplayback.AppExecutors;
+import de.bolz.gpsplayback.Resource;
 
 @Singleton
 public class PlaybackEngine {
@@ -23,6 +26,10 @@ public class PlaybackEngine {
     private long firstLocationTimestamp = -1l;
     private long playbackStartedAt;
     private long lastPostTime;
+    private volatile boolean running = false;
+
+    private LocationSource locationSource;
+    private MutableLiveData<Resource<PlaybackState, Exception>> playbackStateLiveData = new MutableLiveData<>();
 
     @Inject
     public PlaybackEngine(LocationManager locationManager, AppExecutors appExecutors, TimeProvider timeProvider) {
@@ -31,8 +38,13 @@ public class PlaybackEngine {
         this.timeProvider = timeProvider;
     }
 
-    public void startPlayback(LocationSource locationSource, OnFinishListener onFinishListener) {
-        appExecutors.generalIO().execute(() -> {
+    public synchronized void startPlayback(LocationSource locationSource) {
+        if (running) {
+            throw new IllegalStateException("Playback already started");
+        }
+        running = true;
+        this.locationSource = locationSource;
+        appExecutors.diskIO().execute(() -> {
             LocationListener locationListener = new LocationListener() {
                 @Override
                 public void onNewLocation(Location location) {
@@ -41,19 +53,35 @@ public class PlaybackEngine {
                 @Override
                 public void onFinished() {
                     long delay = lastPostTime - timeProvider.elapsedRealtime() + 100;
-                    appExecutors.schedule(onFinishListener::onFinished, appExecutors.playbackThread(), delay);
+                    appExecutors.schedule(() -> playbackStateLiveData.postValue(Resource.success(PlaybackState.STOPPED)), appExecutors.playbackThread(), delay);
+                    running = false;
                 }
             };
             try {
                 locationSource.start(locationListener);
             } catch (IOException e) {
-                e.printStackTrace();
-                onFinishListener.onFinished();
+                playbackStateLiveData.postValue(Resource.error(PlaybackState.STOPPED, e));
+                running = false;
             }
         });
     }
 
+    public LiveData<Resource<PlaybackState, Exception>> getPlaybackState() {
+        return playbackStateLiveData;
+    }
+
+    public synchronized void stopPlayback() {
+        if (locationSource != null && running) {
+            locationSource.stop();
+            locationQueue.clear();
+            locationSource = null;
+        }
+    }
+
     private void handleLocation(Location location) {
+        if (!running) {
+            return;
+        }
         try {
             locationQueue.put(location);
             scheduleLocation(location);
@@ -72,8 +100,10 @@ public class PlaybackEngine {
         long absoluteTimeToPostLocation = locationTime + (playbackStartedAt - firstLocationTimestamp);
         long postDelay = absoluteTimeToPostLocation - now;
 
-        System.out.println("##### postDelay = " + postDelay + ", absolute post time = " + absoluteTimeToPostLocation);
         appExecutors.schedule(() -> {
+            if (!running) {
+                return;
+            }
             try {
                 Location locationFromQueue = locationQueue.take();
                 locationFromQueue.setTime(timeProvider.currentTimeMillis());
@@ -89,7 +119,7 @@ public class PlaybackEngine {
         lastPostTime = absoluteTimeToPostLocation;
     }
 
-    public interface OnFinishListener {
-        void onFinished();
+    public enum PlaybackState {
+        RUNNING, STOPPED
     }
 }

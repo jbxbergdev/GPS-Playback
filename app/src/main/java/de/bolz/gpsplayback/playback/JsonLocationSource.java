@@ -1,7 +1,5 @@
 package de.bolz.gpsplayback.playback;
 
-import android.location.LocationManager;
-
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -38,7 +36,7 @@ public class JsonLocationSource extends LocationSource {
             }
             while (isStarted && jsonParser.nextToken() == JsonToken.START_OBJECT) {
                 PersistableLocation persistableLocation = jsonParser.readValueAs(PersistableLocation.class);
-                locationListener.onNewLocation(PersistableLocation.toLocation(persistableLocation, LocationManager.GPS_PROVIDER));
+                locationListener.onNewLocation(PersistableLocation.toLocation(persistableLocation, getProviderName()));
             }
             locationListener.onFinished();
         } finally {
